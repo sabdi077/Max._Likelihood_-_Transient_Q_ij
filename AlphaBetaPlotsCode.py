@@ -17,8 +17,8 @@ class Simulation:
 
     def Delta(self, A):
         N = len(self.states)
-        Q = self.Q_i.copy()  # Initialization
-        Q_history = [Q.copy()]  # Keep a history of Q at each time step
+        Q = self.Q_i.copy()   
+        Q_history = [Q.copy()]   
 
         for t in range(N):
             state, action = self.states[t], self.actions[t]
@@ -91,16 +91,16 @@ def generate_switch_list(state_list):
     return switch_list
 
 def gen_optimized(ws, ft, tR, switch_list):
-    final = (ft - tR) // ws  # Use integer division for direct calculation
-    COL = ["blue"] * (final + 1)  # Initialize COL with "blue" values
+    final = (ft - tR) // ws   
+    COL = ["blue"] * (final + 1)   
     
-    for k in range(final + 1):  # Ensure coverage of the entire range
+    for k in range(final + 1):   
         start = k * ws
         end = start + tR
         for m in switch_list:
-            if start <= m < end:  # Check if switch point is within the range
-                COL[k] = "red"  # Change to red if within the range
-                break  # No need to check further once a switch point is found
+            if start <= m < end:   
+                COL[k] = "red"   
+                break   
                 
     return COL
 
@@ -113,11 +113,11 @@ if __name__ == "__main__":
     Q_i = {'6kHz': {'L': 0, 'R': 0, 'N': 0}, '10kHz': {'L': 0, 'R': 0, 'N': 0}}
     x = range(0, (len(RewSeq) - 307) - 1, 20)
 
-    # Generate the switch list
+    
     expert_list = df['rule'].iloc[:].reset_index(drop=True).tolist()
     switch_list = generate_switch_list(expert_list)
     
-    # Generate the color list
+    
     COL = gen_optimized(20, len(RewSeq), 307, switch_list)
 
     args = [(i, Q_i, df, link) for i in x]
@@ -127,18 +127,18 @@ if __name__ == "__main__":
 
     A, B, Q_i = zip(*results)
 
-    # Plot the optimal values of A
+     
     plt.figure(figsize=(10, 4))
     plt.xlabel('Trials')
     plt.ylabel(r'$\alpha$ (Optimal A)')
-    plt.scatter(x, A, c=COL[:len(A)], label='Optimal A over Trials')  # Use color list COL
+    plt.scatter(x, A, c=COL[:len(A)], label='Optimal A over Trials')  
     plt.legend()
     plt.show()
 
-    # Plot the optimal values of B
+     
     plt.figure(figsize=(10, 4))
     plt.xlabel('Trials')
     plt.ylabel(r'$\beta$ (Optimal B)')
-    plt.scatter(x, B, c=COL[:len(B)], label='Optimal B over Trials')  # Use color list COL
+    plt.scatter(x, B, c=COL[:len(B)], label='Optimal B over Trials')  
     plt.legend()
     plt.show()
