@@ -46,32 +46,32 @@ def process_mouse_type(args):
     return mouse_type, tau, np.mean(bias_counts)
 
 if __name__ == "__main__":
-    # Load the main data file
+   
     df = pd.read_excel('/Users/saadabdisalam/Documents/MouseData_and_Analysis2024-2025/Mouse_DATA.xlsx')
     sixteenP_rev = df['16p_rev'].iloc[:5].dropna().astype(int).tolist()
     sixteenP_var = df['16p_var'].iloc[:5].dropna().astype(int).tolist()
     WT_rev = df['WT_rev'].iloc[:5].dropna().astype(int).tolist()
     WT_var = df['WT_var'].iloc[:5].dropna().astype(int).tolist()
 
-    # Initialize variables
-    taus = range(4, 50)  # Adjust range as needed
+   
+    taus = range(4, 50)  
     mouse_types = ['16p11.2 REV', '16p11.2 VAR', 'WT REV', 'WT VAR']
     mouse_ids = [sixteenP_rev, sixteenP_var, WT_rev, WT_var]
 
     biasA = input("What do you want your action bias to be\n")
 
-    # Prepare arguments for multiprocessing
+    
     tasks = [(mouse_type, ids, tau, biasA) for mouse_type, ids in zip(mouse_types, mouse_ids) for tau in taus]
 
-    # Initialize results dictionary
+   
     results = {mouse_type: [] for mouse_type in mouse_types}
 
-    # Process each file and add bias intervals columns using multiprocessing
+
     with Pool() as pool:
         for mouse_type, tau, mean_bias_count in pool.map(process_mouse_type, tasks):
             results[mouse_type].append((tau, mean_bias_count))
 
-    # Plotting the results
+    
     plt.figure(figsize=(14, 8))
 
     for mouse_type in mouse_types:
