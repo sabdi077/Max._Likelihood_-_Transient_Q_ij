@@ -6,6 +6,7 @@ from multiprocessing import Pool
 
 class Simulation:
     def __init__(self, start_trial, end_trial, Q_i, df):
+        
         self.end_trial = end_trial
         self.start_trial = start_trial
         self.Q_i = Q_i

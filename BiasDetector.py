@@ -9,6 +9,7 @@ def is_bias_condition(S, A, t, tau, A_bias):
     return (abs(I_6 - I_10) / tau < 0.3) and (I_6 + I_10 == tau)
 
 def detector(link, tau, A_bias):
+    
     df = pd.read_csv('/Users/saadabdisalam/Documents/MouseData_and_Analysis2024-2025/' + link)
     S = df['tone_freq'].replace({6000: '6kHz', 10000: '10kHz'}).reset_index(drop=True)
     A = df['response'].reset_index(drop=True)
