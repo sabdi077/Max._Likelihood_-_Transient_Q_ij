@@ -40,7 +40,7 @@ class Simulation:
 
             if ((state == '6kHz' and action == 'L') or (state == '10kHz' and action == 'R')) and (r2 < 0.9):
                 reward = 1
-            elif ((state == '6kHz' and action == 'R') or (state == '10kHz' and action == 'L') or (state == '10kHz' and action == 'N') or (state == '6kHz' and action == 'N')) and (r2 > 0.9):
+            elif ((state == '6kHz' and action == 'R') or (state == '10kHz' and action == 'L')) and (r2 > 0.9):
                 reward = 1
             else:
                 reward = 0
