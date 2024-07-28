@@ -157,7 +157,7 @@ class Runs:
             self.beta_estimates_list.append(np.mean(beta_estimates_j))
         
         return self.alpha_estimates_list, self.beta_estimates_list
-
+# Q change over time plots
 '''r = Runs(3000, 5, 0.7)
 alphas = np.linspace(0.1, 0.99, 10).tolist()
 betas = np.linspace(0.1, 10, 10).tolist()
@@ -174,21 +174,25 @@ plt.xlabel('True Betas')
 plt.ylabel('Estimated Betas')
 plt.legend()
 plt.show()'''
-# Running the simulation
+# the N(correct)/num_trials and N(R=1)/num_trials vs. P(R=1|(ca, cs))
 '''sim = Simulation(1000, 0.7)
 states, actions, rewards, Q_history, percent_correct = sim.Generate_SAR(0.6, 3.3)
 sim.plot_Q_values(Q_history)'''
 
-ps = np.linspace(0.5, 1, 1000)
+'''ps = np.linspace(0.5, 1, 1000)
 L=[]
 U=[]
 
 for p in ps:
     sim = Simulation(1000, p)
-    states, actions, rewards, Q_history, percent_correct = sim.Generate_SAR(0.7, 50)
+    states, actions, rewards, Q_history, percent_correct = sim.Generate_SAR(0.9, 1.3)
     L.append(percent_correct)
-    U.append(np.sum(rewards)/1000)
+    U.append(np.sum(rewards)/sim.Num_trials)
 plt.scatter(ps, L, label='correct')
-plt.scatter(ps, U, label='reward')
+#plt.scatter(ps, U, label='reward')
+plt.xlabel('P(R=1|(correct (s,a)))')
+plt.ylabel('N(correct = 1) and N(reward = 1)')
 plt.legend()
-plt.show()
+plt.show()'''
+
+
