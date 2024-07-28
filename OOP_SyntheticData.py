@@ -15,6 +15,7 @@ class Simulation:
         trial_counter = 0
         recent_CORRECT = []
         CORRECT=0
+        Expert = []
         # Initialize Q-values for all actions and states
         for state in self.Q:
             for action in self.Q[state]:
@@ -58,16 +59,19 @@ class Simulation:
             
             if sum(recent_CORRECT)>=19 and trial_counter==0:
                 trial_counter = 250
+                expert_start = t
             
             if trial_counter>0:
                 trial_counter -= 1
                 if trial_counter == 0:
+                    expert_end = t
                     rule_reversed = not rule_reversed
                     recent_CORRECT=[]
+                    Expert.append([expert_start, expert_end])
             
             Q_history.append({s: {a: self.Q[s][a][-1] for a in self.Q[s]} for s in self.Q})
 
-        return self.states, self.actions, self.R, Q_history, CORRECT/self.Num_trials
+        return self.states, self.actions, self.R, Q_history, CORRECT/self.Num_trials, Expert_series
     
     def Q_Algorithm(self, A, t, state, action, reward):
         current_Q = self.Q[state][action][-1]  # Get the last Q-value
