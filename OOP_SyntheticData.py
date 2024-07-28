@@ -71,7 +71,7 @@ class Simulation:
             
             Q_history.append({s: {a: self.Q[s][a][-1] for a in self.Q[s]} for s in self.Q})
 
-        return self.states, self.actions, self.R, Q_history, CORRECT/self.Num_trials, Expert_series
+        return self.states, self.actions, self.R, Q_history, CORRECT/self.Num_trials, Expert
     
     def Q_Algorithm(self, A, t, state, action, reward):
         current_Q = self.Q[state][action][-1]  # Get the last Q-value
@@ -199,4 +199,7 @@ plt.ylabel('N(correct = 1) and N(reward = 1)')
 plt.legend()
 plt.show()'''
 
+'''sim = Simulation(4800, 0.8)
 
+states, actions, rewards, _, _, expert = sim.Generate_SAR(0.4, 4)
+print(expert)'''
