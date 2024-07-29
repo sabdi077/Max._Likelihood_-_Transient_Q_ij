@@ -106,6 +106,8 @@ def gen_optimized(ws, ft, tR, switch_list):
     return COL
 
 if __name__ == "__main__":
+
+
     link = input("Write your link to a csv file\n")
     print(f"{os.getcwd()}/{link}")
     df = pd.read_csv('/Users/saadabdisalam/Documents/MouseDataAnalysis2023-2024/'+ link)
