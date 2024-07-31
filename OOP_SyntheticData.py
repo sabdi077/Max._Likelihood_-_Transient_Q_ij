@@ -2,10 +2,11 @@ import numpy as np
 from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 class Simulation:
-    def __init__(self, Num_trials, p):
+    def __init__(self, Num_trials, p, count):
         self.states = []
         self.actions = []
         self.R = []
+        self.count = count
         self.Num_trials = Num_trials
         self.Q = {'6kHz': {'L': [], 'R': [], 'N': []}, '10kHz': {'L': [], 'R': [], 'N': []}}
         self.p=p
@@ -54,11 +55,11 @@ class Simulation:
             CORRECT+=correct
             self.Q_Algorithm(A, t, state, action, reward)
               
-            if len(recent_CORRECT)>20:
+            if len(recent_CORRECT)>19:
                 recent_CORRECT.pop(0)
             
             if sum(recent_CORRECT)>=19 and trial_counter==0:
-                trial_counter = 250
+                trial_counter = self.count
                 expert_start = t
             
             if trial_counter>0:
@@ -135,17 +136,18 @@ class Simulation:
         return -np.sum(log_likelihood)
 
 class Runs:
-    def __init__(self, Num_trials, num_est, p):
+    def __init__(self, Num_trials, num_est, p, count):
         self.Num_trials = Num_trials
         self.num_est = num_est
         self.alpha_estimates_list = []
         self.beta_estimates_list = []
         self.p=p
+        self.count = count
     def estimate_alphas_betas(self, random_alphas, random_betas):
         for j in range(len(random_alphas)):
             alpha_estimates_j = []
             beta_estimates_j = []
-            sim = Simulation(self.Num_trials, self.p)
+            sim = Simulation(self.Num_trials, self.p, self.count)
             states, actions, rewards, _,_ = sim.Generate_SAR(random_alphas[j], random_betas[j])
             
             for i in range(self.num_est):
@@ -162,7 +164,7 @@ class Runs:
         
         return self.alpha_estimates_list, self.beta_estimates_list
 # Q change over time plots
-'''r = Runs(3000, 5, 0.7)
+'''r = Runs(3000, 5, 0.7, 250)
 alphas = np.linspace(0.1, 0.99, 10).tolist()
 betas = np.linspace(0.1, 10, 10).tolist()
 alpha_ests, beta_ests = r.estimate_alphas_betas(alphas, betas)
@@ -178,17 +180,18 @@ plt.xlabel('True Betas')
 plt.ylabel('Estimated Betas')
 plt.legend()
 plt.show()'''
-# the N(correct)/num_trials and N(R=1)/num_trials vs. P(R=1|(ca, cs))
-'''sim = Simulation(1000, 0.7)
-states, actions, rewards, Q_history, percent_correct = sim.Generate_SAR(0.6, 3.3)
-sim.plot_Q_values(Q_history)'''
-
-'''ps = np.linspace(0.5, 1, 1000)
+'''# the N(correct)/num_trials and N(R=1)/num_trials vs. P(R=1|(ca, cs))
+sim = Simulation(500, 0.4, 250)
+states, actions, rewards, Q_history, percent_correct, expert = sim.Generate_SAR(0.8, 3.3)
+sim.plot_Q_values(Q_history)
+'''
+'''
+ps = np.linspace(0.5, 1, 1000)
 L=[]
 U=[]
 
 for p in ps:
-    sim = Simulation(1000, p)
+    sim = Simulation(1000, p, 250)
     states, actions, rewards, Q_history, percent_correct = sim.Generate_SAR(0.9, 1.3)
     L.append(percent_correct)
     U.append(np.sum(rewards)/sim.Num_trials)
@@ -199,7 +202,7 @@ plt.ylabel('N(correct = 1) and N(reward = 1)')
 plt.legend()
 plt.show()'''
 
-'''sim = Simulation(4800, 0.8)
+'''sim = Simulation(4800, 0.8, 250)
 
 states, actions, rewards, _, _, expert = sim.Generate_SAR(0.4, 4)
 print(expert)'''
