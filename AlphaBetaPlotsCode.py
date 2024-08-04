@@ -82,7 +82,7 @@ def process_trial(args):
     mle = MLE(start_trial, end_trial, Q_i, df)
     A_optimal, B_optimal, ll, P = mle.func()
     Q_i = sim2.Delta(A_optimal)
-    return A_optimal, B_optimal, Q_i
+    return 100*A_optimal, B_optimal, Q_i
 
 def generate_switch_list(state_list):
     switch_list = []
@@ -110,7 +110,7 @@ if __name__ == "__main__":
 
     link = input("Write your link to a csv file\n")
     print(f"{os.getcwd()}/{link}")
-    df = pd.read_csv('/Users/saadabdisalam/Documents/MouseDataAnalysis2023-2024/'+ link)
+    df = pd.read_csv('/Users/saadabdisalam/Documents/MouseData_and_Analysis2024-2025/'+ link)
     RewSeq = df['rew_t'].iloc[:].reset_index(drop=True).astype(int)
 
     Q_i = {'6kHz': {'L': 0, 'R': 0, 'N': 0}, '10kHz': {'L': 0, 'R': 0, 'N': 0}}
