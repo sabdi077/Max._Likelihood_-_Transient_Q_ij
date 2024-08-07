@@ -11,7 +11,7 @@ class Simulation:
         self.R = []
         self.count = count
         self.Num_trials = Num_trials
-        self.Q = Q_i
+        self.Q = Q_i.copy()  # Use copy to avoid side effects
         self.p = p
 
     def Generate_SAR(self, A, B):
@@ -24,7 +24,7 @@ class Simulation:
 
         for state in self.Q:
             for action in self.Q[state]:
-                self.Q[state][action] = 0  # Start with a single initial Q-value
+                self.Q[state][action] = 0
 
         for t in range(self.Num_trials):
             state = '6kHz' if np.random.rand() < 0.5 else '10kHz'
@@ -50,16 +50,13 @@ class Simulation:
                 correct = (state == '6kHz' and action == 'R') or (state == '10kHz' and action == 'L')
 
             r2 = np.random.rand()
-            if (correct and (r2 < self.p)) or (not correct and (r2 > self.p)):
-                reward = 1
-            else:
-                reward = 0
+            reward = 1 if (correct and (r2 < self.p)) or (not correct and (r2 > self.p)) else 0
+            # recent_CORRECT.append(correct)
             self.R.append(reward)
-            recent_CORRECT.append(correct)
-            CORRECT += correct
+            # CORRECT += correct
             self.Q_Algorithm(A, state, action, reward)
 
-            if len(recent_CORRECT) > 19:
+            '''if len(recent_CORRECT) > 19:
                 recent_CORRECT.pop(0)
 
             if sum(recent_CORRECT) >= 19 and trial_counter == 0:
@@ -72,34 +69,18 @@ class Simulation:
                     expert_end = t
                     rule_reversed = not rule_reversed
                     recent_CORRECT = []
-                    Expert.append([expert_start, expert_end])
+                    Expert.append([expert_start, expert_end])'''
 
             Q_history.append({s: {a: self.Q[s][a] for a in self.Q[s]} for s in self.Q})
 
         return self.states, self.actions, self.R, Q_history, CORRECT / self.Num_trials, Expert
 
     def Q_Algorithm(self, A, state, action, reward):
-        current_Q = self.Q[state][action]  # Get the last Q-value
-        new_Q = current_Q + A * (reward - current_Q)
-        self.Q[state][action] = new_Q
-
-    def plot_Q_values(self, Q_history):
-        times = range(len(Q_history))
-
-        for state in ['6kHz', '10kHz']:
-            for action in ['L', 'R', 'N']:
-                Q_values = [Q[state][action] for Q in Q_history]
-                plt.plot(times, Q_values, label=f'{state} - {action}')
-
-        plt.xlabel('Time')
-        plt.ylabel('Q-value')
-        plt.legend()
-        plt.title('Q-values over time')
-        plt.show()
+        self.Q[state][action] += A * (reward - self.Q[state][action])
 
     def log_likelihood(self, A, B, states, actions, rewards):
-        log_likelihood = []
         Q = {'6kHz': {'L': 0, 'R': 0, 'N': 0}, '10kHz': {'L': 0, 'R': 0, 'N': 0}}
+        log_likelihood = []
 
         for t in range(self.Num_trials):
             state = states[t]
@@ -127,10 +108,7 @@ class Simulation:
 
             if t < self.Num_trials - 1:
                 for a in ['L', 'R', 'N']:
-                    if a == action:
-                        Q[state][a] = Q[state][a] + A * (reward - Q[state][a])
-                    else:
-                        Q[state][a] = Q[state][a]
+                    Q[state][a] += A * (reward - Q[state][a]) if a == action else 0
 
         return log_likelihood
 
@@ -150,25 +128,27 @@ class Runs:
         self.count = count
 
     def estimate_alphas_betas(self, random_alphas, random_betas):
+        alpha_estimates = []
+        beta_estimates = []
         for j in range(len(random_alphas)):
-            alpha_estimates_j = []
-            beta_estimates_j = []
             sim = Simulation(self.Num_trials, self.p, self.count, self.Q_i)
             states, actions, rewards, _, _, _ = sim.Generate_SAR(random_alphas[j], random_betas[j])
+            alpha_estimates_j = []
+            beta_estimates_j = []
 
-            for i in range(self.num_est):
+            for _ in range(self.num_est):
                 initial_guess = [np.random.uniform(0, 1), np.random.uniform(0, 10)]
-                bounds = [(0, 2), (0, 34)]
+                bounds = [(0, 1.5), (0, 11)]
 
                 result = minimize(lambda x: sim.neg_log_likelihood(x, states, actions, rewards), initial_guess, bounds=bounds)
                 alpha_fit, beta_fit = result.x
                 alpha_estimates_j.append(alpha_fit)
                 beta_estimates_j.append(beta_fit)
 
-            self.alpha_estimates_list.append(np.mean(alpha_estimates_j))
-            self.beta_estimates_list.append(np.mean(beta_estimates_j))
+            alpha_estimates.append(np.mean(alpha_estimates_j))
+            beta_estimates.append(np.mean(beta_estimates_j))
 
-        return self.alpha_estimates_list, self.beta_estimates_list
+        return alpha_estimates, beta_estimates
 
 def MSEvsTrial(args):
     real_alpha, real_beta, num_est, Q_i, max_trials = args
@@ -176,34 +156,37 @@ def MSEvsTrial(args):
     MSE_BETA_list = []
 
     for i in range(1, max_trials + 1):
-        runs_simulation = Runs(i, 1, 0.9, 250, Q_i)
+        runs_simulation = Runs(i, num_est, 0.9, 250, Q_i)
         alpha_estimates, beta_estimates = runs_simulation.estimate_alphas_betas([real_alpha], [real_beta])
 
-        Dev_MSE_alpha = [(alpha_estimates[0] - real_alpha)**2]
-        Dev_MSE_beta = [(beta_estimates[0] - real_beta)**2]
+        alpha_squared_errors = (np.array(alpha_estimates) - real_alpha) ** 2
+        beta_squared_errors = (np.array(beta_estimates) - real_beta) ** 2
 
-        MSE_ALPHA = np.sum(Dev_MSE_alpha) / num_est
-        MSE_BETA = np.sum(Dev_MSE_beta) / num_est
+        MSE_ALPHA = np.mean(alpha_squared_errors)
+        MSE_BETA = np.mean(beta_squared_errors)
 
         MSE_ALPHA_list.append(MSE_ALPHA)
         MSE_BETA_list.append(MSE_BETA)
 
     return MSE_ALPHA_list, MSE_BETA_list
 
-def find_min_trials(real_alphas, real_betas, num_mice, num_est, Q_i, threshold, success_rate, max_trials):
-    num_trials = max_trials  # Default value
+def find_min_trials(real_alphas, real_betas, num_mice, num_est, Q_i, threshold_alpha, threshold_beta, success_rate, max_trials):
     pool = Pool()
     args_list = [(real_alphas[j], real_betas[j], num_est, Q_i, max_trials) for j in range(num_mice)]
+
     MSE_matrices = pool.map(MSEvsTrial, args_list)
+    
     pool.close()
     pool.join()
 
     MSE_ALPHA_matrix = np.array([m[0] for m in MSE_matrices])
     MSE_BETA_matrix = np.array([m[1] for m in MSE_matrices])
 
+    num_trials = max_trials
     for t in range(1, max_trials + 1):
-        if np.mean(MSE_ALPHA_matrix[:, t-1] <= threshold) >= success_rate and \
-           np.mean(MSE_BETA_matrix[:, t-1] <= threshold) >= success_rate:
+        alpha_condition = np.mean(MSE_ALPHA_matrix[:, t-1] <= threshold_alpha) >= success_rate
+        beta_condition = np.mean(MSE_BETA_matrix[:, t-1] <= threshold_beta) >= success_rate
+        if alpha_condition and beta_condition:
             num_trials = t
             break
 
@@ -214,13 +197,14 @@ if __name__ == "__main__":
     real_alphas = np.linspace(0, 1, num_mice)
     real_betas = np.linspace(0, 10, num_mice)
 
-    threshold = 0.5
+    threshold_alpha = 0.04
+    threshold_beta = 0.2
     success_rate = 1
     max_trials = 5000
     num_est = 10
     Q_i = {'6kHz': {'L': 0, 'R': 0, 'N': 0}, '10kHz': {'L': 0, 'R': 0, 'N': 0}}
 
-    num_trials, MSE_ALPHA_matrix, MSE_BETA_matrix = find_min_trials(real_alphas, real_betas, num_mice, num_est, Q_i, threshold, success_rate, max_trials)
+    num_trials, MSE_ALPHA_matrix, MSE_BETA_matrix = find_min_trials(real_alphas, real_betas, num_mice, num_est, Q_i, threshold_alpha, threshold_beta, success_rate, max_trials)
 
     Num_trials = np.arange(1, num_trials + 1)
 
@@ -244,5 +228,5 @@ if __name__ == "__main__":
     plt.yticks(np.arange(0, num_mice, 1), np.round(real_betas, 2))
     plt.show()
 
-    print(f"The minimum number of trials needed for MSE(alpha) <= {threshold} for 100% of alphas: {num_trials}")
-    print(f"The minimum number of trials needed for MSE(beta) <= {threshold} for 100% of betas: {num_trials}")
+    print(f"The minimum number of trials needed for MSE(alpha) <= {threshold_alpha} for 100% of alphas: {num_trials}")
+    print(f"The minimum number of trials needed for MSE(beta) <= {threshold_beta} for 100% of betas: {num_trials}")
