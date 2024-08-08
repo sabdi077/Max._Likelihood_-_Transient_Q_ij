@@ -3,19 +3,17 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 from multiprocessing import Pool
-
 class Simulation:
     def __init__(self, start_trial, end_trial, Q_i, df):
-        
-        self.end_trial = end_trial
         self.start_trial = start_trial
+        self.end_trial = end_trial
+        self.Num_trials = end_trial - start_trial
         self.Q_i = Q_i
         self.R = df['rew_t'].iloc[start_trial:end_trial].reset_index(drop=True).astype(int)
         self.states = df['tone_freq'].iloc[start_trial:end_trial].replace({6000: '6kHz', 10000: '10kHz'}).reset_index(drop=True)
         self.actions = df['response'].iloc[start_trial:end_trial].reset_index(drop=True)
-        self.correct_act = df['corr_choice'].iloc[start_trial:end_trial].reset_index(drop=True)
         self.flags = df['expert'].iloc[start_trial:end_trial].reset_index(drop=True)
-
+    
     def Delta(self, A):
         N = len(self.states)
         Q = self.Q_i.copy()   
@@ -27,24 +25,31 @@ class Simulation:
             Q_history.append(Q.copy())
 
         return Q
-
-    def log(self, A, B):  
+    def log(self, A, B):
         log_likelihood = []
-        Q_history = [self.Q_i.copy()]
+        Q = {'6kHz': {'L': [0]*self.Num_trials, 'R': [0]*self.Num_trials, 'N': [0]*self.Num_trials},
+             '10kHz': {'L': [0]*self.Num_trials, 'R': [0]*self.Num_trials, 'N': [0]*self.Num_trials}}
 
-        for t in range(self.end_trial - self.start_trial):
-            q_current = Q_history[t][self.states[t]][self.actions[t]]
-            opposite_actions = {'L': ['R', 'N'], 'R': ['N', 'L'], 'N': ['L', 'R']}
-            q_opposite1 = Q_history[t][self.states[t]][opposite_actions[self.actions[t]][0]]
-            q_opposite2 = Q_history[t][self.states[t]][opposite_actions[self.actions[t]][1]]
-            q_diff1 = q_opposite1 - q_current
-            q_diff2 = q_opposite2 - q_current
-            P_t = 1 / (1 + np.exp(B * q_diff1) + np.exp(B * q_diff2))
-            log_likelihood.append(np.log(P_t))
-
+        for t in range(len(self.states)):
+            state = self.states[t]
+            action = self.actions[t]
             reward = self.R[t]
-            Q_history.append(Q_history[t].copy())
-            Q_history[t+1][self.states[t]][self.actions[t]] += A * (reward - Q_history[t][self.states[t]][self.actions[t]])
+
+            # Compute the total exponential sum for normalization
+            total_exp = sum(np.exp(B * Q[state][a][t]) for a in ['L', 'R', 'N'])
+            P_L = np.exp(B * Q[state]['L'][t]) / total_exp
+            P_R = np.exp(B * Q[state]['R'][t]) / total_exp
+            P_N = 1 - (P_L + P_R)
+
+            P_t = {'L': P_L, 'R': P_R, 'N': P_N}[action]
+            log_likelihood.append(np.log(P_t) if P_t > 1e-15 else -1e15)
+
+            if t + 1 < self.Num_trials:  # Ensure we don't go out of range
+                for a in ['L', 'R', 'N']:
+                    if a == action:
+                        Q[state][a][t+1] = Q[state][a][t] + A * (reward - Q[state][a][t])
+                    else:
+                        Q[state][a][t+1] = Q[state][a][t]
 
         return log_likelihood
 
@@ -69,79 +74,137 @@ class MLE:
         for i, A in enumerate(self.A_range):
             for j, B in enumerate(self.B_range):
                 nlog_likelihoods[i, j] = real.neg_log_likelihood([A, B])
-        
+
         ll = np.exp(np.min(nlog_likelihoods) - nlog_likelihoods)
         P = ll / np.sum(ll)
         i_min, j_min = np.unravel_index(np.argmin(ll), nlog_likelihoods.shape)
         return self.A_range[i_min], self.B_range[j_min], ll, P
 
-def process_trial(args):
-    start_trial, Q_i, df, link = args
-    end_trial = start_trial + 500
-    sim2 = Simulation(start_trial, start_trial + 20, Q_i, df)
-    mle = MLE(start_trial, end_trial, Q_i, df)
-    A_optimal, B_optimal, ll, P = mle.func()
-    Q_i = sim2.Delta(A_optimal)
-    return 100*A_optimal, B_optimal, Q_i
+def find_expert_segments(expert_series, rew_prob):
+    expert_segments = []
+    in_segment = False
+    segment_start = None
 
-def generate_switch_list(state_list):
-    switch_list = []
-    for i in range(1, len(state_list)):
-        if state_list[i] != state_list[i-1]:
-            switch_list.append(i)
-    return switch_list
+    for i in range(len(expert_series)):
+        if expert_series[i] and rew_prob[i] == 0.9 and not in_segment:
+            in_segment = True
+            segment_start = i
+        elif not (expert_series[i] and rew_prob[i] == 0.9) and in_segment:
+            in_segment = False
+            expert_segments.append((segment_start, i - 1))
+            segment_start = None
 
-def gen_optimized(ws, ft, tR, switch_list):
-    final = (ft - tR) // ws   
-    COL = ["blue"] * (final + 1)   
-    
-    for k in range(final + 1):   
-        start = k * ws
-        end = start + tR
-        for m in switch_list:
-            if start <= m < end:   
-                COL[k] = "red"   
-                break   
-                
-    return COL
+    if in_segment:
+        expert_segments.append((segment_start, len(expert_series) - 1))
 
-if __name__ == "__main__":
+    return expert_segments
 
 
-    link = input("Write your link to a csv file\n")
-    print(f"{os.getcwd()}/{link}")
-    df = pd.read_csv('/Users/saadabdisalam/Documents/MouseData_and_Analysis2024-2025/'+ link)
-    RewSeq = df['rew_t'].iloc[:].reset_index(drop=True).astype(int)
-
+def run_simulation_for_segments(df):
     Q_i = {'6kHz': {'L': 0, 'R': 0, 'N': 0}, '10kHz': {'L': 0, 'R': 0, 'N': 0}}
-    x = range(0, (len(RewSeq) - 500) - 1, 20)
-
+    expert_series = df['expert'].iloc[:].reset_index(drop=True).tolist()
+    rew_prob = df['rew_prob'].iloc[:].reset_index(drop=True).tolist()
+    expert_segments = find_expert_segments(expert_series, rew_prob)
+    results = []
+    colors = ['blue', 'green', 'red', 'purple', 'orange']  # More colors can be added if needed
+    start_trial = 0
+    if len(expert_segments)==1:
+        end_trial=expert_segments[0]
+        alpha_parameters = {a: [] for a in range(3)}
+        beta_parameters = {b: [] for b in range(3)}
+        for s in range(3):
+            '''
+            s = 0 is the pre expert phase, s=1 is the expert phase, s=2, is post expert phase
+            '''
+            mle = MLE(start_trial, end_trial, Q_i, df)
+            A_optimal, B_optimal, ll, P, mle.func()
+            alpha_parameters[s].append(A_optimal)
+            beta_parameters[s].append(B_optimal)
+            Q_i = Simulation(start_trial, end_trial, Q_i, df).Delta(A_optimal)
+            start_trial = end_trial
+            if s == 0:
+                end_trial = expert_segments[1]
+            elif s==1:
+                end_trial = len(rew_prob)
+    else:
+        end_trial = expert_segments[0][0]
+        alpha_parameters = {a: [] for a in range(5)}
+        beta_parameters = {b: [] for b in range(5)}
+        for s in range(5):
+            '''
+            s=0 is pre first expert phase, s=1 is first expert phase, s=2 is post first expert phase, s=3 second expert phase, s=4 is post second expert phase
+            '''
+            mle = MLE(start_trial, end_trial, Q_i, df)
+            A_optimal, B_optimal, ll, P = mle.func()
+            alpha_parameters[s].append(A_optimal)
+            beta_parameters[s].append(B_optimal)
+            Q_i = Simulation(start_trial, end_trial, Q_i, df).Delta(A_optimal)
+            start_trial = end_trial
+            if s == 0:
+                end_trial = expert_segments[0][1]
+            elif s == 1:
+                end_trial = expert_segments[1][0]
+            elif s==2:
+                end_trial = expert_segments[1][1]
+            elif s==3:
+                end_trial = len(rew_prob)
     
-    rule_list = df['rule'].iloc[:].reset_index(drop=True).tolist()
-    switch_list = generate_switch_list(rule_list)
+    return alpha_parameters, beta_parameters
+
+df_mice = pd.read_excel('/Users/saadabdisalam/Documents/MouseData_and_Analysis2024-2025/Mouse_DATA.xlsx')
+mouse_per_mouse_type = int(input('How many mouse/mouse_type would you like choose numbers ranging from 1 to 5?\n'))
+# Ensure column names are correct
+links_16p_rev = df_mice['link_16p_rev'].iloc[:mouse_per_mouse_type].dropna().tolist()
+links_16p_var = df_mice['link_16p_var'].iloc[:mouse_per_mouse_type].dropna().tolist()
+links_WT_rev = df_mice['link_WT_rev'].iloc[:mouse_per_mouse_type].dropna().tolist()
+links_WT_var = df_mice['link_WT_var'].iloc[:mouse_per_mouse_type].dropna().tolist()
+
+def alphasbetas(mouse_links):
+    ALPHAS = {link: [] for link in mouse_links}
+    BETAS = {link: [] for link in mouse_links}
+    for link in mouse_links:
+        df_mouse = pd.read_csv(f'/Users/saadabdisalam/Documents/MouseData_and_Analysis2024-2025/{link}')
+        alpha_parameters, beta_parameters = run_simulation_for_segments(df_mouse)
+        for i in range(len(alpha_parameters)):
+            ALPHAS[link].extend(alpha_parameters[i])
+            BETAS[link].extend(beta_parameters[i])
+    return ALPHAS, BETAS
+
+mouse_type_input = input('What mouse type would you like? (16p_rev, 16p_var, WT_rev, WT_var)\n')
+mouse_type_dict = {
+    '16p_rev': links_16p_rev,
+    '16p_var': links_16p_var,
+    'WT_rev': links_WT_rev,
+    'WT_var': links_WT_var
+}
+
+selected_mouse_type = mouse_type_dict.get(mouse_type_input, [])
+
+if not selected_mouse_type:
+    print("Invalid mouse type selected.")
+else:
+    A, B = alphasbetas(selected_mouse_type)
+
+    for mouse_link in selected_mouse_type:
+        # Plot alpha parameters
+        phases = list(A[mouse_link].keys())
+        values = [A[mouse_link][phase][0] for phase in phases]  # Assuming each phase has one value
+        plt.plot(phases, values, label=f'Alpha: {mouse_link}')
     
-    
-    COL = gen_optimized(20, len(RewSeq), 500, switch_list)
-
-    args = [(i, Q_i, df, link) for i in x]
-
-    with Pool() as pool:
-        results = pool.map(process_trial, args)
-
-    A, B, Q_i = zip(*results)
-
-     
-    plt.figure(figsize=(10, 4))
-    plt.xlabel('Trials')
-    plt.ylabel(r'$\alpha$ (Optimal A)')
-    plt.scatter(x, A, c=COL[:len(A)], label='Optimal A over Trials')  
     plt.legend()
+    plt.title('Alpha Parameters for ' + mouse_type_input)
+    plt.xlabel('Phases')
+    plt.ylabel('Alpha Value')
     plt.show()
 
-     
-    plt.figure(figsize=(10, 4))
-    plt.xlabel('Trials')
-    plt.ylabel(r'$\beta$ (Optimal B)')
-    plt.scatter(x, B, c=COL[:len(B)], label='Optimal B over Trials')  
+    for mouse_link in selected_mouse_type:
+        # Plot beta parameters
+        phases = list(B[mouse_link].keys())
+        values = [B[mouse_link][phase][0] for phase in phases]  # Assuming each phase has one value
+        plt.plot(phases, values, label=f'Beta: {mouse_link}')
+    
     plt.legend()
+    plt.title('Beta Parameters for ' + mouse_type_input)
+    plt.xlabel('Phases')
+    plt.ylabel('Beta Value')
     plt.show()
