@@ -197,7 +197,7 @@ if __name__ == "__main__":
     real_alphas = np.linspace(0, 1, num_mice)
     real_betas = np.linspace(0, 10, num_mice)
 
-    threshold_alpha = 0.04
+    threshold_alpha = 0.04  
     threshold_beta = 0.2
     success_rate = 1
     max_trials = 5000
